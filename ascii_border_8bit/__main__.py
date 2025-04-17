@@ -40,6 +40,9 @@ def parse_args():
     parser.add_argument(
         "--fade_quant", type=int, default=None,
         help="Fade width in characters between 8-bit region and original (default: same as --quant)")
+    parser.add_argument(
+        "--radius", type=int, default=0,
+        help="Corner rounding radius in characters for the ASCII border (default: 0)")
     return parser.parse_args()
 
 def main():
@@ -129,6 +132,9 @@ def main():
     if bc + qc > max_d:
         print("Combined border exceeds image size.", file=sys.stderr)
         sys.exit(1)
+    # Determine rounding radius (in character cells), clamp to border thickness
+    rr = max(0, args.radius)
+    rr = min(rr, bc)
 
     # Build cell-level masks with fades
     cell_mask_ascii = Image.new("L", (cols, rows), 0)
@@ -146,6 +152,32 @@ def main():
                     m1 = 0
             else:
                 m1 = 255 if d < bc else 0
+            # Apply corner rounding to ASCII mask: fill white background in rounded corners
+            if rr > 0:
+                # Top-left corner
+                if x < rr and y < rr:
+                    dx = rr - x - 0.5
+                    dy = rr - y - 0.5
+                    if dx*dx + dy*dy > rr*rr:
+                        m1 = 255
+                # Top-right corner
+                elif x >= cols - rr and y < rr:
+                    dx = x - (cols - rr) + 0.5
+                    dy = rr - y - 0.5
+                    if dx*dx + dy*dy > rr*rr:
+                        m1 = 255
+                # Bottom-left corner
+                elif x < rr and y >= rows - rr:
+                    dx = rr - x - 0.5
+                    dy = y - (rows - rr) + 0.5
+                    if dx*dx + dy*dy > rr*rr:
+                        m1 = 255
+                # Bottom-right corner
+                elif x >= cols - rr and y >= rows - rr:
+                    dx = x - (cols - rr) + 0.5
+                    dy = y - (rows - rr) + 0.5
+                    if dx*dx + dy*dy > rr*rr:
+                        m1 = 255
             cell_mask_ascii.putpixel((x, y), max(0, min(255, m1)))
             # Quant fade region
             if d < bc:
@@ -158,6 +190,33 @@ def main():
                 m2 = int(round((bc + qc - d) * 255.0 / fade_q))
             else:
                 m2 = 0
+            # Apply corner rounding to quant region boundary (ascii-8bit transition)
+            if rr > 0 and m2 > 0:
+                # Quant region outer corners at distance bc from edge
+                # Top-left
+                if x < bc + rr and y < bc + rr:
+                    dx = (bc + rr) - x - 0.5
+                    dy = (bc + rr) - y - 0.5
+                    if dx*dx + dy*dy > rr*rr:
+                        m2 = 0
+                # Top-right
+                elif x >= cols - (bc + rr) and y < bc + rr:
+                    dx = x - (cols - (bc + rr)) + 0.5
+                    dy = (bc + rr) - y - 0.5
+                    if dx*dx + dy*dy > rr*rr:
+                        m2 = 0
+                # Bottom-left
+                elif x < bc + rr and y >= rows - (bc + rr):
+                    dx = (bc + rr) - x - 0.5
+                    dy = y - (rows - (bc + rr)) + 0.5
+                    if dx*dx + dy*dy > rr*rr:
+                        m2 = 0
+                # Bottom-right
+                elif x >= cols - (bc + rr) and y >= rows - (bc + rr):
+                    dx = x - (cols - (bc + rr)) + 0.5
+                    dy = y - (rows - (bc + rr)) + 0.5
+                    if dx*dx + dy*dy > rr*rr:
+                        m2 = 0
             cell_mask_quant.putpixel((x, y), max(0, min(255, m2)))
     # Upscale masks to full image size
     mask_ascii = cell_mask_ascii.resize((width, height), resample=Image.NEAREST)
@@ -175,7 +234,16 @@ def main():
     except Exception as e:
         print(f"Error compositing ASCII region: {e}", file=sys.stderr)
         sys.exit(1)
-
+    # Apply outer rounding to final image over white background
+    if rr > 0:
+        mask = Image.new("L", (width, height), 0)
+        draw_mask = ImageDraw.Draw(mask)
+        radius_px = rr * cell_w
+        draw_mask.rounded_rectangle(
+            [(0, 0), (width, height)], radius=radius_px, fill=255
+        )
+        white_bg = Image.new("RGB", (width, height), "white")
+        result = Image.composite(result, white_bg, mask)
     # Save output
     try:
         result.save(args.output)
