@@ -18,7 +18,7 @@ pip install Pillow
 ```bash
 python3 -m ascii_border_8bit \
     INPUT_IMAGE OUTPUT_IMAGE \
-    [--border N] [--quant N] \
+    [--border N] [--quant N] [--fade_ascii N] [--fade_quant N] \
     [--font PATH] [--font_size SIZE] [--chars CHARS] [--color] \
     [--colors M] [--dither]
 ```
@@ -31,7 +31,9 @@ python3 -m ascii_border_8bit \
 - `--chars`: Characters ordered dark-to-light for ASCII art (default: "@%#*+=-:. ").
 - `--color`: Colorize ASCII by sampling original pixel colors (off by default).
 - `--colors`: Number of colors for 8-bit quantization (default: 256).
-- `--dither`: Enable Floyd–Steinberg dithering for quantization (off by default).
+    - `--dither`: Enable Floyd–Steinberg dithering for quantization (off by default).
+    - `--fade_ascii`: Fade width in characters between ASCII and 8-bit region (default: same as --border).
+    - `--fade_quant`: Fade width in characters between 8-bit region and original (default: same as --quant).
 
 ### Example
 ```bash

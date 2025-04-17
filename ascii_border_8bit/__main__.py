@@ -34,6 +34,12 @@ def parse_args():
     parser.add_argument(
         "--dither", action="store_true",
         help="Enable Floyd–Steinberg dithering for quantization")
+    parser.add_argument(
+        "--fade_ascii", type=int, default=None,
+        help="Fade width in characters between ASCII and 8-bit region (default: same as --border)")
+    parser.add_argument(
+        "--fade_quant", type=int, default=None,
+        help="Fade width in characters between 8-bit region and original (default: same as --quant)")
     return parser.parse_args()
 
 def main():
@@ -79,13 +85,13 @@ def main():
         print("Image too small for given font size.", file=sys.stderr)
         sys.exit(1)
 
-    # ASCII canvas
+    # Precompute grayscale thumbnail for ASCII mapping
+    gs = img.convert("L").resize((cols, rows), resample=Image.BILINEAR)
+    # Build ASCII canvas with white background
     ascii_canvas = Image.new("RGB", (width, height), color="white")
-    draw = ImageDraw.Draw(ascii_canvas)
+    draw_ascii = ImageDraw.Draw(ascii_canvas)
     chars = args.chars
     n_chars = len(chars)
-    # Precompute grayscale thumbnail for brightness
-    gs = img.convert("L").resize((cols, rows), resample=Image.BILINEAR)
     for y in range(rows):
         for x in range(cols):
             p = gs.getpixel((x, y))
@@ -97,7 +103,7 @@ def main():
                 fill = img.getpixel((min(px, width-1), min(py, height-1)))
             else:
                 fill = (0, 0, 0)
-            draw.text((px, py), ch, font=font, fill=fill)
+            draw_ascii.text((px, py), ch, font=font, fill=fill)
 
     # 8-bit quantization canvas
     dither = Image.FLOYDSTEINBERG if args.dither else Image.NONE
@@ -111,9 +117,11 @@ def main():
         print(f"Error quantizing image: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Determine region thickness
+    # Determine region thickness and fade widths
     bc = args.border
     qc = args.quant if args.quant is not None else bc
+    fade_a = args.fade_ascii if args.fade_ascii is not None else bc
+    fade_q = args.fade_quant if args.fade_quant is not None else qc
     if bc < 0 or qc < 0:
         print("--border and --quant must be non-negative", file=sys.stderr)
         sys.exit(1)
@@ -122,24 +130,51 @@ def main():
         print("Combined border exceeds image size.", file=sys.stderr)
         sys.exit(1)
 
-    # Build cell-level masks for ascii and quant regions
+    # Build cell-level masks with fades
     cell_mask_ascii = Image.new("L", (cols, rows), 0)
     cell_mask_quant = Image.new("L", (cols, rows), 0)
     for y in range(rows):
         for x in range(cols):
-            d = min(x, cols-1-x, y, rows-1-y)
+            d = min(x, cols - 1 - x, y, rows - 1 - y)
+            # ASCII fade region
+            if fade_a > 0:
+                if d <= bc - fade_a:
+                    m1 = 255
+                elif d < bc:
+                    m1 = int(round((bc - d) * 255.0 / fade_a))
+                else:
+                    m1 = 0
+            else:
+                m1 = 255 if d < bc else 0
+            cell_mask_ascii.putpixel((x, y), max(0, min(255, m1)))
+            # Quant fade region
             if d < bc:
-                cell_mask_ascii.putpixel((x, y), 255)
-            elif d < bc + qc:
-                cell_mask_quant.putpixel((x, y), 255)
-    # Upscale masks to full resolution
+                m2 = 0
+            elif d < bc + fade_a and fade_a > 0:
+                m2 = int(round((d - bc) * 255.0 / fade_a))
+            elif d <= bc + qc - fade_q:
+                m2 = 255
+            elif d < bc + qc and fade_q > 0:
+                m2 = int(round((bc + qc - d) * 255.0 / fade_q))
+            else:
+                m2 = 0
+            cell_mask_quant.putpixel((x, y), max(0, min(255, m2)))
+    # Upscale masks to full image size
     mask_ascii = cell_mask_ascii.resize((width, height), resample=Image.NEAREST)
     mask_quant = cell_mask_quant.resize((width, height), resample=Image.NEAREST)
 
-    # Composite layers: start with original, paste quant, then ascii
-    result = img.copy()
-    result.paste(quant_canvas, (0, 0), mask_quant)
-    result.paste(ascii_canvas, (0, 0), mask_ascii)
+    # Composite 8-bit region over original with fade
+    try:
+        base = Image.composite(quant_canvas, img, mask_quant)
+    except Exception as e:
+        print(f"Error compositing quant region: {e}", file=sys.stderr)
+        sys.exit(1)
+    # Composite ASCII canvas over quantized base with fade
+    try:
+        result = Image.composite(ascii_canvas, base, mask_ascii)
+    except Exception as e:
+        print(f"Error compositing ASCII region: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Save output
     try:
