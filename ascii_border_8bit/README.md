@@ -20,7 +20,7 @@ python3 -m ascii_border_8bit \
     INPUT_IMAGE OUTPUT_IMAGE \
     [--border N] [--quant N] [--fade_ascii N] [--fade_quant N] \
     [--font PATH] [--font_size SIZE] [--chars CHARS] [--color] \
-    [--colors M] [--dither]
+    [--colors M] [--dither] [--radius N]
 ```
 
 ### Arguments
@@ -34,6 +34,7 @@ python3 -m ascii_border_8bit \
     - `--dither`: Enable Floyd–Steinberg dithering for quantization (off by default).
     - `--fade_ascii`: Fade width in characters between ASCII and 8-bit region (default: same as --border).
     - `--fade_quant`: Fade width in characters between 8-bit region and original (default: same as --quant).
+    - `--radius`: Corner rounding radius in characters for the ASCII border (default: 0).
 
 ### Example
 ```bash
