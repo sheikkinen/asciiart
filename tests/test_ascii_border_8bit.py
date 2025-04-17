@@ -23,10 +23,24 @@ class TestAsciiBorder8bit(unittest.TestCase):
         # Prepare an input image with overlapping circles for variation
         with tempfile.TemporaryDirectory() as tmpdir:
             inp = os.path.join(tmpdir, "in.png")
+            # Create an Indian-head RCA-style test pattern: gradient, circles, crosshair, and diagonals
             img = Image.new("RGB", (200, 200), color=(255, 255, 255))
+            width, height = img.size
             draw = ImageDraw.Draw(img)
-            draw.ellipse((50, 50, 150, 150), fill=(255, 0, 0))  # red circle
-            draw.ellipse((80, 80, 180, 180), fill=(0, 255, 0))  # green circle
+            # Gradient background (left to right)
+            for x in range(width):
+                shade = int(x * 255 / (width - 1))
+                draw.line((x, 0, x, height), fill=(shade, shade, shade))
+            # Concentric circles (red outer, green inner)
+            draw.ellipse((0, 0, width, height), outline=(255, 0, 0))
+            draw.ellipse((width // 4, height // 4, width * 3 // 4, height * 3 // 4),
+                         outline=(0, 255, 0))
+            # Crosshair lines (blue)
+            draw.line((width // 2, 0, width // 2, height), fill=(0, 0, 255))
+            draw.line((0, height // 2, width, height // 2), fill=(0, 0, 255))
+            # Diagonal lines (yellow)
+            draw.line((0, 0, width, height), fill=(255, 255, 0))
+            draw.line((width, 0, 0, height), fill=(255, 255, 0))
             img.save(inp)
             # Parameters
             border = 4
@@ -95,11 +109,24 @@ class TestAsciiBorder8bit(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             inp = os.path.join(tmpdir, "in.png")
             outp = os.path.join(tmpdir, "out.png")
-            # Create input image with overlapping circles
+            # Create an Indian-head RCA-style test pattern: gradient, circles, crosshair, and diagonals
             img = Image.new("RGB", (200, 200), color=(255, 255, 255))
+            width, height = img.size
             draw = ImageDraw.Draw(img)
-            draw.ellipse((50, 50, 150, 150), fill=(255, 0, 0))
-            draw.ellipse((80, 80, 180, 180), fill=(0, 255, 0))
+            # Gradient background (left to right)
+            for x in range(width):
+                shade = int(x * 255 / (width - 1))
+                draw.line((x, 0, x, height), fill=(shade, shade, shade))
+            # Concentric circles (red outer, green inner)
+            draw.ellipse((0, 0, width, height), outline=(255, 0, 0))
+            draw.ellipse((width // 4, height // 4, width * 3 // 4, height * 3 // 4),
+                         outline=(0, 255, 0))
+            # Crosshair lines (blue)
+            draw.line((width // 2, 0, width // 2, height), fill=(0, 0, 255))
+            draw.line((0, height // 2, width, height // 2), fill=(0, 0, 255))
+            # Diagonal lines (yellow)
+            draw.line((0, 0, width, height), fill=(255, 255, 0))
+            draw.line((width, 0, 0, height), fill=(255, 255, 0))
             img.save(inp)
             border = 2
             quant = 3
